@@ -1,0 +1,58 @@
+services:
+
+  orchestrator:
+    build: .
+    container_name: dr-orchestrator
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
+    depends_on:
+      - localstack
+
+  primary:
+    build: .
+    container_name: primary-server
+    environment:
+      SERVICE_NAME: primary
+    command: uvicorn service:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8001:8000"
+
+  backup:
+    build: .
+    container_name: backup-server
+    environment:
+      SERVICE_NAME: backup
+    command: uvicorn service:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8002:8000"
+
+  gateway:
+    build: .
+    container_name: dr-gateway
+    command: uvicorn gateway:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8080:8000"
+    depends_on:
+      - primary
+      - backup
+
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    env_file:
+      - .env
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: route53
+      AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
