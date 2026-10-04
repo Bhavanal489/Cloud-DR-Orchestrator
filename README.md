@@ -1,65 +1,86 @@
-# Cloud Disaster Recovery & Failover Orchestrator
+# Cloud Disaster Recovery Orchestrator
 
-An automated disaster recovery orchestration system that detects service failures, classifies the failure type, selects an appropriate recovery strategy, activates backup infrastructure when required, and notifies operators through Slack.
+A simplified automated disaster recovery and failover orchestration system built with **Python, FastAPI, Docker, Boto3, LocalStack, Route 53, and Slack**.
 
-## Problem
-
-Different failures require different recovery actions.
-
-- A transient failure may require a retry.
-- An application failure may require restarting the application.
-- An infrastructure failure may require failing over to a backup service.
-
-This project implements a simplified disaster recovery orchestration workflow that makes recovery decisions based on the detected failure type.
+The system continuously monitors a primary service, detects failures, classifies them, performs the appropriate recovery action, activates a backup when required, switches traffic, and sends an alert.
 
 ## Key Features
 
-- Failure detection through health checks
+- Automatic health monitoring every 5 seconds
+- Automatic failure detection
 - Failure classification
-- Automated recovery orchestration
 - Retry for transient failures
 - Application restart for application failures
-- Failover to backup for infrastructure failures
-- Docker-based primary and backup services
-- Automatic traffic switching through a gateway
-- AWS Route 53 failover configuration using LocalStack
-- Slack disaster recovery notifications
-- REST API using FastAPI
-- Docker Compose multi-service architecture
+- Automatic failover for infrastructure failures
+- Primary and backup services using Docker
+- Automatic traffic switching through a local gateway
+- Route 53 failover configuration using LocalStack
+- Boto3 integration for AWS API interaction
+- Slack notifications
+- FastAPI orchestration API
+- Docker Compose environment
 
 ## Architecture
 
 ```text
-Primary Service
-      |
-      v
-Failure Detection
-      |
-      v
-Failure Classifier
-      |
-      +------------------+---------------------+
-      |                  |                     |
-  Transient          Application        Infrastructure
-      |                  |                     |
-    Retry             Restart               Failover
-                                            |
-                                            v
-                                      Backup Service
-                                            |
-                                            v
-                                      Traffic Gateway
-                                            |
-                                            v
-                                    Healthy Service
+                 Primary Service
+                       │
+                       ▼
+              Health Monitoring
+                       │
+                       ▼
+              Failure Detection
+                       │
+                       ▼
+              Failure Classifier
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+       Retry        Restart      Failover
+                                    │
+                                    ▼
+                              Backup Service
+                                    │
+                                    ▼
+                              Traffic Gateway
+                                    │
+                                    ▼
+                              User Traffic
 
-                    Recovery Result
-                           |
-                           v
-                    Slack Notification
+              ┌──────────────┐
+              │  LocalStack  │
+              │   Route 53   │
+              └──────────────┘
+
+              ┌──────────────┐
+              │    Slack     │
+              │   Alerts     │
+              └──────────────┘
 ```
 
-## Failure Classification
+## Recovery Workflow
+
+```text
+Primary Service
+      ↓
+Health Monitoring
+      ↓
+Failure Detected
+      ↓
+Failure Classification
+      ↓
+Recovery Decision
+      ↓
+Retry / Restart / Failover
+      ↓
+Backup Activated (if required)
+      ↓
+Traffic Switched
+      ↓
+Slack Notification
+```
+
+### Failure Classification
 
 | Failure Type | Recovery Action |
 |---|---|
@@ -68,24 +89,21 @@ Failure Classifier
 | Infrastructure | Failover to backup |
 | Unknown | Alert operator |
 
+The project includes a failure-classification layer so that the system does not blindly perform a full failover for every failure.
+
 ## Technology Stack
 
-### Backend
-- Python
-- FastAPI
-- Uvicorn
-
-### Cloud / AWS
-- AWS Boto3
-- Amazon Route 53
-- LocalStack
-
-### Infrastructure
-- Docker
-- Docker Compose
-
-### Notifications
-- Slack Incoming Webhooks
+| Technology | Purpose |
+|---|---|
+| Python | Core orchestration logic |
+| FastAPI | API and orchestration controller |
+| Docker | Service containers |
+| Docker Compose | Multi-container environment |
+| Boto3 | AWS API interaction |
+| LocalStack | Local AWS simulation |
+| Route 53 | Failover configuration |
+| Slack Webhook | Alerts |
+| Uvicorn | Application server |
 
 ## Project Structure
 
@@ -94,237 +112,180 @@ cloud-dr-orchestrator/
 │
 ├── app/
 │   ├── __init__.py
-│   ├── aws_client.py
 │   ├── main.py
+│   ├── state.py
 │   ├── recovery.py
+│   ├── aws_client.py
 │   ├── route53_manager.py
-│   ├── slack_notifier.py
-│   └── state.py
+│   └── slack_notifier.py
 │
 ├── Dockerfile
 ├── docker-compose.yml
-├── gateway.py
 ├── service.py
+├── gateway.py
 ├── requirements.txt
 ├── .env
-├── .gitignore
-└── README.md
+└── .gitignore
 ```
+
+`.env` contains local secrets and should not be committed.
 
 ## Services
 
-### Orchestrator
-The central FastAPI service responsible for failure detection, classification, recovery decisions, and notifications.
+| Service | Purpose | Port |
+|---|---|---:|
+| Primary Server | Main application | 8001 |
+| Backup Server | Recovery application | 8002 |
+| DR Orchestrator | Monitoring and recovery | 8000 |
+| DR Gateway | Traffic routing | 8080 |
+| LocalStack | AWS/Route 53 simulation | 4566 |
 
-### Primary Server
-The main application service.
+## How to Run
 
-### Backup Server
-The standby service used during infrastructure failure.
-
-### Traffic Gateway
-Checks the health of the primary and backup services and routes traffic to a healthy service.
-
-### LocalStack
-Provides a local simulation of AWS services used by the project, including Route 53.
-
-## Recovery Workflow
-
-```text
-1. Detect failure
-       ↓
-2. Classify failure
-       ↓
-3. Select recovery strategy
-       ↓
-4. Execute recovery
-       ↓
-5. Activate backup if required
-       ↓
-6. Route traffic to healthy service
-       ↓
-7. Send Slack notification
-```
-
-## API Endpoints
-
-### Health
-
-```text
-GET /health
-```
-
-### Infrastructure Status
-
-```text
-GET /infrastructure
-```
-
-### Simulate Failure
-
-```text
-POST /simulate/failure?failure_type=<type>
-```
-
-Supported failure types:
-
-```text
-transient
-application
-infrastructure
-```
-
-### Detect Failure
-
-```text
-GET /detect-failure
-```
-
-### Classify Failure
-
-```text
-GET /classify-failure
-```
-
-### Orchestrate Recovery
-
-```text
-POST /orchestrate-recovery
-```
-
-Runs the complete failure detection, classification, recovery, and notification workflow.
-
-### Route 53
-
-```text
-GET  /aws/route53/zones
-POST /aws/route53/create-zone
-
-GET  /aws/route53/failover-records
-POST /aws/route53/create-failover-records
-```
-
-## Running the Project
-
-### Prerequisites
-
-- Python
-- Docker Desktop
-- Docker Compose
-
-### Environment Variables
-
-Create a `.env` file:
+### 1. Configure `.env`
 
 ```env
 LOCALSTACK_AUTH_TOKEN=your_localstack_token
-SLACK_WEBHOOK_URL=your_slack_webhook_url
+SLACK_WEBHOOK_URL=your_slack_webhook
 ```
 
-Do not commit `.env` to Git.
+### 2. Build and start
 
-### Start the System
-
-```bash
+```powershell
 docker compose up -d --build
 ```
 
-### Check Services
+Check the containers:
 
-```bash
+```powershell
 docker compose ps
 ```
 
-The system uses:
+### 3. Check the monitor
+
+```powershell
+curl.exe http://localhost:8000/monitor/status
+```
+
+Expected:
 
 ```text
-Orchestrator → http://localhost:8000
-Primary      → http://localhost:8001
-Backup       → http://localhost:8002
-Gateway      → http://localhost:8080
-LocalStack   → http://localhost:4566
+monitor: running
+primary: healthy
+backup: healthy
 ```
 
-## Example: Infrastructure Failure
+## Automatic Disaster Recovery Demo
 
-Simulate an infrastructure failure:
+The failure is manually injected only to reproduce a failure scenario. **Recovery itself is automatic.**
 
-```bash
-curl -X POST "http://localhost:8000/simulate/failure?failure_type=infrastructure"
+### 1. Verify primary traffic
+
+```powershell
+curl.exe http://localhost:8080/
 ```
 
-Run recovery:
-
-```bash
-curl -X POST "http://localhost:8000/orchestrate-recovery"
-```
-
-The orchestrator:
-
-1. Detects the failure.
-2. Classifies it as an infrastructure failure.
-3. Selects failover.
-4. Activates the backup service.
-5. Sends a Slack notification.
-
-## Testing
-
-The system was tested with three failure scenarios.
-
-### 1. Transient Failure
+Expected:
 
 ```text
-Failure → Retry → Primary Recovery
+active_backend: primary
 ```
 
-### 2. Application Failure
+### 2. Stop the primary
+
+```powershell
+docker stop primary-server
+```
+
+No recovery endpoint needs to be called.
+
+The background monitor detects the failure automatically.
+
+### 3. Verify backup traffic
+
+Wait a few seconds and run:
+
+```powershell
+curl.exe http://localhost:8080/
+```
+
+Expected:
 
 ```text
-Failure → Application Restart → Recovery
+active_backend: backup
 ```
 
-### 3. Infrastructure Failure
+### 4. Check Slack
+
+The configured Slack channel receives:
 
 ```text
-Failure → Failover → Backup Activation
+CLOUD DISASTER RECOVERY ALERT
+Failure Type: infrastructure
+Recovery Action: failover
+Recovery Result: backup_activated
 ```
 
-The infrastructure failure was also tested by actually stopping the primary Docker container and verifying that the gateway switched traffic to the backup service.
+### 5. Restore the primary
 
-## AWS Route 53 Simulation
+```powershell
+docker start primary-server
+```
 
-AWS Route 53 functionality is demonstrated locally using LocalStack.
+## Testing Failure Types
 
-The project creates:
+The simulation endpoint is available for controlled testing.
 
-- A hosted zone
-- A PRIMARY failover record
-- A SECONDARY failover record
+### Transient
 
-This allows the Route 53 failover configuration to be developed and tested locally without deploying production AWS infrastructure.
+```powershell
+curl.exe -X POST "http://localhost:8000/simulate/failure?failure_type=transient"
+```
 
-## Design Consideration
+Recovery action: **retry**
 
-Cloud providers already provide disaster recovery and failover mechanisms. This project does not attempt to replace those systems.
+### Application
 
-Instead, it implements a simplified orchestration layer to demonstrate:
+```powershell
+curl.exe -X POST "http://localhost:8000/simulate/failure?failure_type=application"
+```
 
-- Failure detection
-- Failure classification
-- Automated recovery decisions
-- Service failover
-- Cloud API interaction
-- Infrastructure automation
-- Operational notifications
+Recovery action: **restart application**
 
-## Future Improvements
+### Infrastructure
 
-- Persistent state storage
-- Multi-region infrastructure
-- Advanced health checks
-- Recovery Time Objective (RTO) monitoring
-- Recovery Point Objective (RPO) tracking
-- Authentication and role-based access
-- Metrics and monitoring
-- Automated recovery testing
-- Kubernetes-based deployment
+```powershell
+curl.exe -X POST "http://localhost:8000/simulate/failure?failure_type=infrastructure"
+```
+
+Recovery action: **failover**
+
+## Important API Endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/health` | GET | Orchestrator health |
+| `/infrastructure` | GET | Primary and backup status |
+| `/monitor/status` | GET | Automatic monitor status |
+| `/detect-failure` | GET | Detect failure |
+| `/classify-failure` | GET | Classify failure |
+| `/simulate/failure` | POST | Simulate failure |
+| `/orchestrate-recovery` | POST | Manually trigger recovery for testing |
+| `/aws/status` | GET | Check Route 53 connection |
+| `/aws/route53/create-zone` | POST | Create hosted zone |
+| `/aws/route53/zones` | GET | List hosted zones |
+| `/aws/route53/create-failover-records` | POST | Create failover records |
+| `/aws/route53/failover-records` | GET | View failover records |
+
+## Route 53 with LocalStack
+
+The project uses **Boto3** to interact with Route 53 through **LocalStack**.
+
+It demonstrates:
+
+- Hosted zone creation
+- Primary and secondary failover records
+- Listing hosted zones
+- Listing failover records
+
+The Route 53 portion is simulated locally with LocalStack. The Docker gateway provides the actual local traffic-switching demonstration between the primary and backup services.
